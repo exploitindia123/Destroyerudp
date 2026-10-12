@@ -1,0 +1,20 @@
+{
+    "6681602097": {
+        "unique_device_id": "Google|2caf2a75-a430-4e4f-931f-386a53fc25e0",
+        "brand": "OPPO",
+        "model": "CPH2611",
+        "gpu_renderer": "Adreno (TM) 720",
+        "system_software": "Android OS 14 / API-34",
+        "screen_width": 1280,
+        "screen_height": 2400,
+        "screen_dpi": "413",
+        "memory": 3549,
+        "processor_details": "ARM64 FP ASIMD AES VMH | 2444 | 10",
+        "client_ip": "139.243.89.150",
+        "android_id": "66048636f63259d0",
+        "gsf_id": "c3ef41517af2cf63",
+        "build_fingerprint": "oppo/cph2611/cph2611:Android_OS_14/user/release-keys",
+        "serial_number": "e79fdc69166ca279",
+        "hardware_id": "677300328f191e0f"
+    }
+}
