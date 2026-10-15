@@ -489,6 +489,23 @@ function ago(ts){if(!ts)return'--';const s=Math.floor(Date.now()/1000-ts);if(s<5
 function fmtNum(n){if(n==null)return '0';return Number(n).toLocaleString()}
 function fmtExp(n){if(n>=1000000)return (n/1000000).toFixed(2)+'M';if(n>=1000)return (n/1000).toFixed(1)+'K';return String(n)}
 
+/* ==================== SAFE JSON PARSER ==================== */
+async function safeJson(r){
+    const text = await r.text();
+    const clean = text.replace(/^\uFEFF/, '').trim();
+    try{
+        return JSON.parse(clean);
+    }catch(e){
+        console.error('Non-JSON response:', text.slice(0, 500));
+        throw new Error('Server returned invalid JSON: ' + clean.slice(0, 120));
+    }
+}
+
+async function safeFetch(url, options){
+    const r = await fetch(url, options);
+    return await safeJson(r);
+}
+
 /* ==================== CONFIRM ==================== */
 function showConfirm(title,msg,yesText,noText){
     return new Promise(resolve=>{
@@ -525,7 +542,7 @@ async function delAcc(uid){
     }
 
     try{
-        await fetch('/api/account/delete',{
+        await safeFetch('/api/account/delete',{
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({uid, keep_in_file:false})
@@ -539,10 +556,10 @@ async function delAcc(uid){
 }
 
 async function pauseAcc(uid){
-    try{await fetch('/api/account/pause',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid})});fetchStats()}catch(e){}
+    try{await safeFetch('/api/account/pause',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid})});fetchStats()}catch(e){}
 }
 async function resumeAcc(uid){
-    try{await fetch('/api/account/resume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid})});fetchStats()}catch(e){}
+    try{await safeFetch('/api/account/resume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid})});fetchStats()}catch(e){}
 }
 
 const restartCooldowns = {};
@@ -570,12 +587,11 @@ async function restartAcc(uid,btn){
         },1000);
     }
     try{
-        const r = await fetch('/api/account/restart',{
+        const d = await safeFetch('/api/account/restart',{
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({uid})
         });
-        const d = await r.json();
         if(d.status !== 'ok'){
             alert('Restart failed: ' + (d.error||'unknown'));
         }
@@ -600,7 +616,7 @@ async function refreshAcc(uid,btn){
         }, 2500);
     }
     try{
-        await fetch('/api/account/resume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid})});
+        await safeFetch('/api/account/resume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid})});
         await fetchStats();
     }catch(e){}
 }
@@ -720,13 +736,15 @@ async function fetchStats(){
     try{
         const r=await fetch('/api/stats');
         if(r.status===401){window.location.href='./index';return}
-        const d=await r.json();
+        const d = await safeJson(r);
         if(d.is_locked){
             showLockView();
             return;
         }
         render(d);
-    }catch(e){}
+    }catch(e){
+        console.warn('fetchStats failed:', e.message);
+    }
 }
 
 /* ==================== VIEW SWITCHING ==================== */
@@ -800,12 +818,11 @@ async function submitGuest(){
     btn.textContent = 'Validating...';
 
     try{
-        const r = await fetch('/api/account/add-job',{
+        const d = await safeFetch('/api/account/add-job',{
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({uid, password: pw})
         });
-        const d = await r.json();
 
         if(d.status === 'ok'){
             const badge = d.mode === 'BR' ? '<span class="badge br">BR</span>' : '<span class="badge lw">LW</span>';
@@ -865,12 +882,11 @@ async function submitBulk(){
     btn.textContent = 'Adding ' + BULK_ACCOUNTS.length + ' accounts...';
 
     try{
-        const r = await fetch('/api/account/bulk-add', {
+        const d = await safeFetch('/api/account/bulk-add', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body: JSON.stringify({accounts: BULK_ACCOUNTS})
         });
-        const d = await r.json();
         if(d.status === 'ok'){
             const resEl = document.getElementById('resultBox');
             resEl.innerHTML =
@@ -917,8 +933,7 @@ async function openAutoSettings(){
         document.getElementById('autoModal').style.display = 'flex';
         document.getElementById('autoModal').classList.add('on');
         try{
-            const r = await fetch('/api/auto/get');
-            const d = await r.json();
+            const d = await safeFetch('/api/auto/get');
             if(d.status === 'ok'){
                 document.getElementById('autoDeleteEnabled').checked = !!d.auto_delete_enabled;
                 document.getElementById('autoTargetLevel').value = d.auto_delete_target_level || 22;
@@ -948,27 +963,27 @@ async function saveAutoSettings(){
     const brLimit = parseInt(document.getElementById('brLimit').value || '3');
 
     try{
-        await fetch('/api/auto/toggle', {
+        await safeFetch('/api/auto/toggle', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({enabled: autoDeleteEnabled})
         });
-        await fetch('/api/auto/set-level', {
+        await safeFetch('/api/auto/set-level', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({target_level: lvl})
         });
-        await fetch('/api/auto/toggle-lw', {
+        await safeFetch('/api/auto/toggle-lw', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({enabled: lwEnabled})
         });
-        await fetch('/api/auto/toggle-br', {
+        await safeFetch('/api/auto/toggle-br', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({enabled: brEnabled})
         });
-        await fetch('/api/auto/set-limits', {
+        await safeFetch('/api/auto/set-limits', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({lw_limit: lwLimit, br_limit: brLimit})
@@ -989,13 +1004,11 @@ document.getElementById('autoModal').addEventListener('click',e=>{
 /* ==================== LOCK ADMIN LOGIC ==================== */
 async function loadLockAdmin(){
     try{
-        const r = await fetch('/api/lock/get');
-        const d = await r.json();
+        const d = await safeFetch('/api/lock/get');
         updateLockBtn(!!d.locked);
     }catch(e){}
     try{
-        const r = await fetch('/api/lock/data');
-        const d = await r.json();
+        const d = await safeFetch('/api/lock/data');
         document.getElementById('lkTotalAccounts').textContent = fmtNum(d.total_accounts||0);
         document.getElementById('lkTotalExp').textContent = fmtExp(d.total_exp||0);
         document.getElementById('lkRunning').textContent = fmtNum(d.total_running||0);
@@ -1024,10 +1037,9 @@ function updateLockBtn(locked){
 
 async function toggleLock(){
     try{
-        const r = await fetch('/api/lock/get');
-        const d = await r.json();
+        const d = await safeFetch('/api/lock/get');
         const newState = !d.locked;
-        await fetch('/api/lock/toggle',{
+        await safeFetch('/api/lock/toggle',{
             method:'POST',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify({locked:newState})
@@ -1038,8 +1050,7 @@ async function toggleLock(){
 
 async function downloadAccountsJSON(){
     try{
-        const r = await fetch('/api/lock/data');
-        const d = await r.json();
+        const d = await safeFetch('/api/lock/data');
         const blob = new Blob([JSON.stringify(d.accounts||[], null, 2)], {type:'application/json'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1065,14 +1076,12 @@ async function downloadAccountsJSON(){
 
     // Check lock state
     try{
-        const r = await fetch('/api/lock/get');
-        const d = await r.json();
+        const d = await safeFetch('/api/lock/get');
         if(d.locked){
             showLockView();
             setInterval(async ()=>{
                 try{
-                    const r2 = await fetch('/api/lock/get');
-                    const d2 = await r2.json();
+                    const d2 = await safeFetch('/api/lock/get');
                     if(!d2.locked) window.location.reload();
                 }catch(e){}
             }, 5000);
